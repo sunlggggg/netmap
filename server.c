@@ -3,7 +3,9 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/epoll.h>
 
+#define MAX_OPEN_FD  1024
 int main(){
     printf("%s\n", "server ...");
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -19,29 +21,49 @@ int main(){
     serv_addr.sin_port = htons(port);
     bind(serv_sock, (struct sockaddr*) &serv_addr,sizeof(serv_addr));
 
-    int ret = listen(serv_sock, 1000);
+    listen(serv_sock, 1000);
+
+    int ep_fd = epoll_create(MAX_OPEN_FD);
+    struct epoll_event ep_events;
+    ep_events.events = EPOLLIN;
+    ep_events.data.fd = serv_sock;
+    epoll_ctl(ep_fd, EPOLL_CTL_ADD, serv_sock, &ep_events);
+    struct epoll_event ep[MAX_OPEN_FD];
 
     for(;;){
-        struct sockaddr_in clnt_addr;
-        socklen_t clnt_addr_size = sizeof(clnt_addr);
-        int clnt_sock = accept(serv_sock,
-                (struct sockaddr*)&clnt_addr, &clnt_addr_size);
-        printf("%s:%s\n","remote_ip", inet_ntoa(clnt_addr.sin_addr));
-        printf("%s:%d\n","remote_port", ntohs(clnt_addr.sin_port));
-        printf("%s:%d\n","fd", clnt_sock);
-        for(;;){
-            char buf[12];
-            memset(&buf, '\0', sizeof(buf) );
-	     
-            int len = recv(clnt_sock, buf, sizeof(buf), 0); 
-	    if(len < 0){
-		close(clnt_sock);
-		break;
-	    }
-            printf("%s", &buf);
-            send(clnt_sock, buf, len, 0);
-        }
+	// -1 meaning blocking
+	size_t ready = epoll_wait(ep_fd,ep,MAX_OPEN_FD, -1);
+	for( int i = 0 ; i < ready; i++){
+           // new connect
+	   if(ep[i].data.fd == serv_sock){
+               struct sockaddr_in clnt_addr;
+               socklen_t clnt_addr_size = sizeof(clnt_addr);
+	       int clnt_sock = accept(serv_sock,(struct sockaddr*)&clnt_addr,&clnt_addr_size);
+	       printf("%s:%s\n","remote_ip", inet_ntoa(clnt_addr.sin_addr));
+	       printf("%s:%d\n","remote_port", ntohs(clnt_addr.sin_port));
+	       printf("%s:%d\n","fd", clnt_sock);
+	       struct epoll_event tep;
+	       tep.events = EPOLLIN;
+               tep.data.fd = clnt_sock;
+               epoll_ctl(ep_fd,EPOLL_CTL_ADD,clnt_sock,&tep);
+	   } else {
+	       int fd = ep[i].data.fd;
+               char buf[12];
+               int len = recv(fd, buf, sizeof(buf), 0);
+	       if(len == 0 ){
+	           epoll_ctl(ep_fd,EPOLL_CTL_DEL,fd,NULL);
+		   close(fd);
+		   printf("%s:%d", "close", fd);
+	       } else {
+	           printf("%s", &buf);
+                   send(fd, buf, len, 0);
+
+	       }
+
+	   }
+	}
     }
     close(serv_sock);
     return 0;
 }
+
