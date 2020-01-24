@@ -1,9 +1,8 @@
 server: server.o
 	cc -o server server.o
-
-server.o: server.c 
+server.o: server.c
 	cc -c server.c
 
-clean: 
+clean:
 	rm server \
 		server.o
