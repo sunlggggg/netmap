@@ -9,13 +9,13 @@ server: server.o
 	cc -o server server.o
 
 server.o: server.c
-	cc -c server.c
+	cc -c -std=c99 server.c
 
 client.o: client.c
-	cc -c client.c
+	cc -c -std=c99 client.c
 
 trans.o: trans.c
-	cc -c trans.c
+	cc -c -std=c99 trans.c
 
 clean:
 	rm server \
