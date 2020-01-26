@@ -44,7 +44,7 @@ void transfer(int fd, char *buf, int len){
     }
 }
 
-void server(char *server_ip, int port, char *inner_ip){
+void server(char *server_ip, int port){
     printf("%s\n", "server ...");
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     printf("%s:%d\n","fd", serv_sock);
@@ -78,14 +78,6 @@ void server(char *server_ip, int port, char *inner_ip){
                     socklen_t clnt_addr_size = sizeof(clnt_addr);
                     int clnt_sock = accept(serv_sock,(struct sockaddr*)&clnt_addr,&clnt_addr_size);
                     printf("%s:%s\n","remote_ip", inet_ntoa(clnt_addr.sin_addr));
-                    // build map
-                    if(strcmp(inet_ntoa(clnt_addr.sin_addr), inner_ip) == 0){
-                        itoo_map[clnt_sock] = INNER_CONNECT;
-                        printf("%s:%d", "new inner connect fd", clnt_sock);
-                    } else {
-                        printf("%s:%d", "new outer connect fd", clnt_sock);
-                        otoi_connect(clnt_sock);
-                    }
                     printf("%s:%d\n","remote_port", ntohs(clnt_addr.sin_port));
                     printf("%s:%d\n","fd", clnt_sock);
                     struct epoll_event tep;
@@ -97,6 +89,17 @@ void server(char *server_ip, int port, char *inner_ip){
                         int fd = ep[i].data.fd;
                         memset(buf,0,sizeof(buf));
                         int len = recv(fd, buf, sizeof(buf), 0);
+                        if(itoo_map[fd] == 0 && otoi_map[fd] ==0){
+                            // build map
+                            if(strcmp(buf, "**INNER**\r\n") == 0){
+                                itoo_map[fd] = INNER_CONNECT;
+                                printf("%s:%d\n", "new inner connect fd", fd);
+                                break;
+                            } else {
+                                printf("%s:%d\n", "new outer connect fd",fd);
+                                otoi_connect(fd);
+                            }
+                        }
                         if(len < 0 ){
                             if(len == EAGAIN ){
                                 printf("%s:%d", "close ...", fd);
@@ -124,7 +127,7 @@ void server(char *server_ip, int port, char *inner_ip){
 int main(int argc,char *argv[]){
     int port = atoi(argv[1]);    
     printf("now port is %d\n", port);
-    server("192.168.1.102", port, "192.168.1.102");
+    server("0.0.0.0", port);
     return 0;
 }
 
