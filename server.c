@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -7,11 +8,42 @@
 #include <errno.h>
 
 // establish queue size
-#define BACKLOG 1024
-#define MAX_OPEN_FD  1020
+#define BACKLOG 256
+#define MAX_OPEN_FD 256
+#define MAX_INNER_CONNECT 128
+
+#define NO_CONNECT 0
+#define INNER_CONNECT 1
 
 int inner_sock;
 int outer_sock;
+// 0 no connected 1 inner connected > 2 outer connected
+int itoo_map[MAX_INNER_CONNECT];
+int otoi_map[MAX_INNER_CONNECT];
+
+
+// -1 false 
+int otoi_connect(int outer_fd){
+    for(int i =0 ; i < MAX_INNER_CONNECT; i++ ){
+        if(itoo_map[i] == INNER_CONNECT){
+            //todo  thread safty
+            itoo_map[i] = outer_fd;
+            otoi_map[outer_fd] = i;
+            return 0;
+        }
+    }
+    return -1;
+}
+
+void transfer(int fd, char *buf, int len){
+    // from inner data
+    if(itoo_map[fd] > 0 ) {
+        send(itoo_map[fd], buf, len, 0);
+    } else {
+        send(otoi_map[fd], buf, len, 0);
+    }
+}
+
 void server(char *server_ip, int port, char *inner_ip){
     printf("%s\n", "server ...");
     int serv_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -27,6 +59,7 @@ void server(char *server_ip, int port, char *inner_ip){
     listen(serv_sock, BACKLOG);
 
     int ep_fd = epoll_create(MAX_OPEN_FD);
+
     struct epoll_event ep_events;
     ep_events.events = EPOLLIN|EPOLLET;
     ep_events.data.fd = serv_sock;
@@ -36,6 +69,7 @@ void server(char *server_ip, int port, char *inner_ip){
     for(;;){
         // -1 meaning blocking
         size_t ready = epoll_wait(ep_fd,ep,MAX_OPEN_FD, -1);
+        char buf[13];
         for( int i = 0 ; i < ready; i++){
             // new connect
             if(ep[i].events & EPOLLIN){
@@ -44,10 +78,13 @@ void server(char *server_ip, int port, char *inner_ip){
                     socklen_t clnt_addr_size = sizeof(clnt_addr);
                     int clnt_sock = accept(serv_sock,(struct sockaddr*)&clnt_addr,&clnt_addr_size);
                     printf("%s:%s\n","remote_ip", inet_ntoa(clnt_addr.sin_addr));
+                    // build map
                     if(strcmp(inet_ntoa(clnt_addr.sin_addr), inner_ip) == 0){
-                        inner_sock = clnt_sock;
+                        itoo_map[clnt_sock] = INNER_CONNECT;
+                        printf("%s:%d", "new inner connect fd", clnt_sock);
                     } else {
-                        outer_sock = clnt_sock;
+                        printf("%s:%d", "new outer connect fd", clnt_sock);
+                        otoi_connect(clnt_sock);
                     }
                     printf("%s:%d\n","remote_port", ntohs(clnt_addr.sin_port));
                     printf("%s:%d\n","fd", clnt_sock);
@@ -58,7 +95,6 @@ void server(char *server_ip, int port, char *inner_ip){
                 } else {
                     for(;;){
                         int fd = ep[i].data.fd;
-                        char buf[13];
                         memset(buf,0,sizeof(buf));
                         int len = recv(fd, buf, sizeof(buf), 0);
                         if(len < 0 ){
@@ -71,14 +107,10 @@ void server(char *server_ip, int port, char *inner_ip){
                             }
                         } 
                         printf("%s", &buf);
-                        if(fd == inner_sock) {
-                            send(outer_sock, buf, len, 0);
-                        } else {
-                            send(inner_sock, buf, len, 0);
-                        }
+                        transfer(fd, buf, len);                        
                         if(len < sizeof(buf)){
                             break;
-                        } 
+                        }
                     }
                 }
             } else {
@@ -89,8 +121,10 @@ void server(char *server_ip, int port, char *inner_ip){
     }
     close(serv_sock);
 }
-int main(){
-    server("192.168.1.102", 7000, "192.168.1.106");
+int main(int argc,char *argv[]){
+    int port = atoi(argv[1]);    
+    printf("now port is %d\n", port);
+    server("192.168.1.102", port, "192.168.1.102");
     return 0;
 }
 
