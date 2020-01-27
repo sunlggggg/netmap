@@ -1,4 +1,7 @@
-all: client server trans
+all: client server trans echo
+echo: echo.o
+	cc -o echo echo.o
+
 trans: trans.o
 	cc -o trans trans.o
 
@@ -17,10 +20,15 @@ client.o: client.c
 trans.o: trans.c
 	cc -c -std=c99 trans.c
 
+echo.o: echo.c
+	cc -c -std=c99 echo.c
+
 clean:
 	rm server \
 		client \
 		trans \
+		echo \
         server.o \
 		client.o \
 		trans.o \
+		echo.o

@@ -10,38 +10,7 @@
 // establish queue size
 #define BACKLOG 256
 #define MAX_OPEN_FD 256
-#define MAX_INNER_CONNECT 128
 
-#define NO_CONNECT 0
-#define INNER_CONNECT 1
-int inner_sock;
-int outer_sock;
-// 0 no connected 1 inner connected > 2 outer connected
-int itoo_map[MAX_INNER_CONNECT];
-int otoi_map[MAX_INNER_CONNECT];
-
-
-// -1 false 
-int otoi_connect(int outer_fd){
-    for(int i =0 ; i < MAX_INNER_CONNECT; i++ ){
-        if(itoo_map[i] == INNER_CONNECT){
-            //todo  thread safty
-            itoo_map[i] = outer_fd;
-            otoi_map[outer_fd] = i;
-            return 0;
-        }
-    }
-    return -1;
-}
-
-void transfer(int fd, char *buf, int len){
-    // from inner data
-    if(itoo_map[fd] > 0 ) {
-        send(itoo_map[fd], buf, len, 0);
-    } else {
-        send(otoi_map[fd], buf, len, 0);
-    }
-}
 
 void server(char *server_ip, int port){
     printf("%s\n", "server ...");
@@ -88,17 +57,6 @@ void server(char *server_ip, int port){
                         int fd = ep[i].data.fd;
                         memset(buf,0,sizeof(buf));
                         int len = recv(fd, buf, sizeof(buf), 0);
-                        if(itoo_map[fd] == 0 && otoi_map[fd] ==0){
-                            // build map
-                            if(strcmp(buf, "**INNER**\r\n") == 0){
-                                itoo_map[fd] = INNER_CONNECT;
-                                printf("%s:%d\n", "new inner connect fd", fd);
-                                break;
-                            } else {
-                                printf("%s:%d\n", "new outer connect fd",fd);
-                                otoi_connect(fd);
-                            }
-                        }
                         if(len < 0 ){
                             if(len == EAGAIN ){
                                 printf("%s:%d", "close ...", fd);
@@ -109,7 +67,7 @@ void server(char *server_ip, int port){
                             }
                         } 
                         printf("%s", &buf);
-                        transfer(fd, buf, len);                        
+                        send(fd, buf, len, 0);
                         if(len < sizeof(buf)){
                             break;
                         }
