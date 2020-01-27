@@ -9,6 +9,10 @@
 下面是大致的示意图。
 ![示意图](https://raw.githubusercontent.com/sunlggggg/images/master/netmap/map.png)
 
+- 其中公网机器上运行server来接收两侧的TCP连接。
+
+- 而内网需要运行一个交换程序，来发起到公网机器和外网服务的TCP对，并转发交换TCP对的数据。
+
 ## 问题
 
 如何设计一个可靠的并且较好性能的转发表。
