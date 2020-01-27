@@ -8,7 +8,6 @@
 #include <unistd.h>
 
 #define BUF_SIZE 1024
-#define CLIENT_SIZE 3
 int otoi_map[10000];
 int itoo_map[10000];
 
@@ -54,15 +53,15 @@ void handle(struct epoll_event *ep, size_t ready){
         }
     }
 }
-void client(char *server_ip, int port, char *dest_ip, int dest_port){
+void client(char *server_ip, int port, char *dest_ip, int dest_port, int init_size){
 
-    int  ep_fd = epoll_create(CLIENT_SIZE);
+    int  ep_fd = epoll_create(256);
     struct epoll_event ep_events; 
     ep_events.events=EPOLLIN | EPOLLET;
 
     struct sockaddr_in serv_addr = create_address(server_ip, port);
     struct sockaddr_in dest_serv_addr = create_address(dest_ip, dest_port);
-    for(int i = 0; i< CLIENT_SIZE; i++){
+    for(int i = 0; i< init_size; i++){
         int clnt_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         int dest_clnt_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
         ep_events.data.fd = clnt_sock;
@@ -76,14 +75,15 @@ void client(char *server_ip, int port, char *dest_ip, int dest_port){
         itoo_map[dest_clnt_sock] = clnt_sock;
         send(clnt_sock, prefix, sizeof(prefix), 0 );
     }
-    struct epoll_event ep[CLIENT_SIZE]; 
+    int ep_size = init_size;
+    struct epoll_event ep[256]; 
     for(;;) {
-        size_t ready = epoll_wait(ep_fd, ep, CLIENT_SIZE, -1 );
+        size_t ready = epoll_wait(ep_fd, ep,ep_size, -1 );
         handle(ep, ready);
     }
 }
 
 int main(int argc, char *argv[]){
-    client(argv[1], atoi(argv[2]), argv[3], atoi(argv[4]));
+    client(argv[1], atoi(argv[2]), argv[3], atoi(argv[4]), atoi(argv[5]));
     return 0;
 }
