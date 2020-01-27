@@ -7,7 +7,7 @@
 当客户端的连接来时，则对应空余的预设的内网到外网网关机的TCP，以至于可以互相转发通信。
 
 下面是大致的示意图。
-![示意图](https://raw.githubusercontent.com/sunlggggg/images/master/netmap/map.pn)
+![示意图](https://raw.githubusercontent.com/sunlggggg/images/master/netmap/map.png)
 
 ## 问题
 
