@@ -14,17 +14,23 @@ int otoi_map[10000];
 int itoo_map[10000];
 struct sockaddr_in serv_addr;
 struct sockaddr_in dest_serv_addr;
+int ep_fd;
+struct epoll_event ep_events;
 
 void exchange(int fd, char *buf, int len) {
     if (itoo_map[fd] != 0) {
         send(itoo_map[fd], buf, len, 0);
     } else if (otoi_map[fd] != 0) { // 外部传到内部
         if (strcmp(buf, "**RESET**\r\n") == 0) {
-            printf("reset\n");
+            printf("reset %d \n", otoi_map[fd]);
             int dest_clnt_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-            close(otoi_map[fd]);
             while (connect(dest_clnt_sock, (struct sockaddr *) &dest_serv_addr, sizeof(dest_serv_addr)) == -1);
-            printf("reset new socket to http server is %d\n", dest_clnt_sock);
+            // 回收连接
+            int t = close(otoi_map[fd]);
+            printf("close result is %d\n", t);
+            printf("new socket to http server is %d\n", dest_clnt_sock);
+            ep_events.data.fd = dest_clnt_sock;
+            epoll_ctl(ep_fd, EPOLL_CTL_ADD, dest_clnt_sock, &ep_events);
             itoo_map[dest_clnt_sock] = fd;
             otoi_map[fd] = dest_clnt_sock;
         } else {
@@ -62,9 +68,7 @@ void handle(struct epoll_event *ep, size_t ready) {
 }
 
 void client(char *server_ip, int port, char *dest_ip, int dest_port, int init_size) {
-
-    int ep_fd = epoll_create(256);
-    struct epoll_event ep_events;
+    ep_fd = epoll_create(256);
     ep_events.events = EPOLLIN | EPOLLET;
     serv_addr = create_address(server_ip, port);
     dest_serv_addr = create_address(dest_ip, dest_port);
