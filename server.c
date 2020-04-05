@@ -53,6 +53,7 @@ void releaseMap(int fd) {
     send(inner_fd, prefix, sizeof(prefix), 0);
     itoo_map[inner_fd] = INNER_CONNECT;
     otoi_map[fd] = NO_CONNECT;
+    close(fd);
     fflush(stdout);
 }
 
